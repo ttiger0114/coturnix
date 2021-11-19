@@ -98,6 +98,7 @@ class MyWindow(QMainWindow):
         self.InitialData = {}
         self.VolumeReference = {}
         self.TradingInfo = {}
+        self.TradingType = {}
 
         ####################
         ####### Socket #####
@@ -113,11 +114,14 @@ class MyWindow(QMainWindow):
         self.run()
 
     def table_double_clicked(self):
-        row = self.tableWidget.currentIndex().row()
-        column = self.tableWidget.currentIndex().column()
-        code = self.tableWidget.item(row,0).text()
         # self.tableWidget.setItem(row_num,0,QTableWidgetItem(f"{code}"))
-        print(self.DataDict[code])
+        try:
+            row = self.tableWidget.currentIndex().row()
+            column = self.tableWidget.currentIndex().column()
+            code = self.tableWidget.item(row,0).text()
+            print(self.DataDict[code])
+        except:
+            pass
         # print(self.tableWidget.item(row,0).text())
 
 
@@ -303,6 +307,7 @@ class MyWindow(QMainWindow):
                 path = "volume_data/{}.csv".format(code)
                 # df.to_excel(path, mode = 'w', index = False) 
                 df.to_csv(path, index = False) 
+            
 
         elif rqname == "예수금조회":
             available = self.GetCommData(trcode, rqname, 0, "주문가능금액")
@@ -600,16 +605,34 @@ class MyWindow(QMainWindow):
             except:
                 return
 
-            ## 주식 매도
-            if self.TradingInfo[code][1] > 0:  ## 매수한 주식 존재시
-                current_price = abs_stock_realtime_data[3]
-                target_price = float(self.TradingInfo[code][0])*(1 + self.profit_rate/100)
-                low_price = float(self.TradingInfo[code][0])*(1 - self.profit_rate/100)
-                quantity = self.TradingInfo[code][1]
+            ## baseline 이하로 가격 하락시
+            baseline_price = self.TradingInfo[code][2] * (1 - self.profit_rate/100)
+            if self.TradingType[code] == 1 and self.TradingInfo[code][2] >= 1 and a0 <= baseline_price: ## 매도 상황에서 미체결 물량 존재 및 기준가 이하로 하락시
+                time.sleep(0.4)
+                self.SendOrder("매수취소", "8002", self.account, 3, code , self.TradingInfo[code][2], 0, "03", self.TradingInfo[code][3])
+                self.available = int(self.available + self.TradingInfo[code][0] * self.TradingInfo[code][2] )
+                self.account_money_text.setText(f" 주문가능금액: {self.available}")
+                self.TradingInfo[code][2] = 0
+                
+                now = datetime.datetime.now()
+                current_time = now.strftime("%H:%M:%S")
+                name = self.GetMasterCodeName(code)
+                name = name.replace(" ", "")
+                self.plain_text_edit.appendPlainText(f"[{current_time}] [예측실패] {name} {code}\n 취소수량:{self.TradingInfo[code][2]}\n")
 
-                # print(f"target{target_price}, current{current_price}, low{low_price}, quan{quantity}")
-                if current_price >= target_price or current_price <= low_price: # 조건 충족시 시장가 매도
-                    self.SendOrder("매도", "8001", self.account, 2, code , quantity, 0, "03", "")
+                self.SendOrder("매도", "8001", self.account, 2, code , self.TradingInfo[code][1], 0, "03", "") ## 보유 전량 시장가 매도 
+
+
+            ## 주식 매도
+            # if self.TradingInfo[code][1] > 0 and self.TradingInfo[code][2] == 0 :  ## 주식 매수 완료시
+            #     current_price = abs_stock_realtime_data[3]
+            #     target_price = float(self.TradingInfo[code][0])*(1 + self.profit_rate/100)
+            #     low_price = float(self.TradingInfo[code][0])*(1 - self.profit_rate/100)
+            #     quantity = self.TradingInfo[code][1]
+
+            #     # print(f"target{target_price}, current{current_price}, low{low_price}, quan{quantity}")
+            #     if current_price >= target_price or current_price <= low_price: # 조건 충족시 시장가 매도
+            #         self.SendOrder("매도", "8001", self.account, 2, code , quantity, 0, "03", "")
 
 
             ###############
@@ -675,24 +698,42 @@ class MyWindow(QMainWindow):
                 trading_price0 = int(self.GetChejanData('910')) ## 체결가
                 trading_number = int(self.GetChejanData('911')) # 누적 체결 수량
 
-                self.TradingInfo[code][0] = int(trading_price)
                 now = datetime.datetime.now()
                 current_time = now.strftime("%H:%M:%S")
-                # self.plain_text_edit.appendPlainText(f"[{current_time}] {name} {code} {trading_state} {trading_price} {trading_number}")
-                # print(f"[{current_time}] {name} {code}{trading_state} {trading_sort} {trading_price} {trading_number}")
 
                 if trading_type == '1': ## 매도시 예수금 증가
+                    self.TradingType[code] = 1
                     self.available = int(self.available + trading_price0 * (trading_number - self.TradingInfo[code][4]) * (1-0.00245) )
                     self.account_money_text.setText(f" 주문가능금액: {self.available}")
-                    self.plain_text_edit.appendPlainText(f"[{current_time}] [매도] {name} {code}\n 체결가:{trading_price0} 체결수량:{trading_number}/{int(trading_number) + int(not_traded_amount)}")
+
+                    if trading_sort != "시장가":
+                        self.plain_text_edit.appendPlainText(f"[{current_time}] [예측성공] {name} {code}\n 체결가:{trading_price0} 체결수량:{trading_number}/{int(trading_number) + int(not_traded_amount)}")
+
+                    self.plain_text_edit.appendPlainText(f"[{current_time}] [매도] {name} {code}\n 체결가:{trading_price0} 체결수량:{trading_number}/{int(trading_number) + int(not_traded_amount)}\n")
                     print(f"[{current_time}] [매도] {name} {code}\n 체결가:{trading_price0} 체결수량:{trading_number}/{int(trading_number) + int(not_traded_amount)}")
                     self.TradingInfo[code][4] = trading_number
-                    if int(not_traded_amount) == 0:  # 미체결 수량 부재시 0으로 초기화
+                    if int(not_traded_amount) == 0:  # 미체결 수량 부재시 (매도완료시) 0으로 초기화
                         self.TradingInfo[code][4] = 0
+                        self.TradingType[code] = 0 ## 거래 상황 초기화
 
                 elif  trading_type == '2': ## 매수시 예수금 감소
-                    self.plain_text_edit.appendPlainText(f"[{current_time}] [매수] {name} {code}\n 체결가:{trading_price0} 체결수량:{trading_number}/{int(trading_number) + int(not_traded_amount)}")
+                    self.TradingType[code] = 2
+                    trading_avg_price = self.GetChejanData('931') # 평균 매입가
+                    self.TradingInfo[code][0] = int(trading_avg_price)
+                    self.plain_text_edit.appendPlainText(f"[{current_time}] [매수] {name} {code}\n 체결가:{trading_price0} 체결수량:{trading_number}/{int(trading_number) + int(not_traded_amount)}\n")
                     print(f"[{current_time}] [매수] {name} {code}\n 체결가:{trading_price0} 체결수량:{trading_number}/{int(trading_number) + int(not_traded_amount)}")
+
+                    
+                    ## 매수 완료시 매도 주문 
+                    if self.TradingInfo[code][1] > 0 and self.TradingInfo[code][2] == 0 : 
+                        current_price = trading_avg_price
+                        target_price = int(float(trading_avg_price)*(1 + self.profit_rate/100))
+                        quantity = self.TradingInfo[code][1]
+                        self.SendOrder("매도", "8001", self.account, 2, code , quantity, target_price, "00", "") ## 지정가 매도주문
+
+                        # if current_price >= target_price or current_price <= low_price: # 조건 충족시 시장가 매도
+                        #     self.SendOrder("매도", "8001", self.account, 2, code , quantity, 0, "03", "")
+
                 #     self.available = int(self.available - trading_price0 * trading_number * (1+0.00015) )
                 #     self.account_money_text.setText(f" 주문가능금액: {self.available}")
 
@@ -750,6 +791,7 @@ class MyWindow(QMainWindow):
             self.DataDict[code] = [temp]
             self.FirstReceiveFlag[code] = 0
             self.TradingInfo[code] = [0, 0, 0 , '', 0] # order price, order amount, not signed amount, order number, traded amount
+            self.TradingType[code] = 0 # 0 = 대기, 1 = 매도, 2 = 매수
 
     # class AutoUpdate(QThread):
     #     def __init__(self, window, parent = None):
@@ -923,10 +965,21 @@ class MyWindow(QMainWindow):
             pass
 
     def InitializeVolumeReference(self, code):
-        datapath = f"volume_data/{code}.csv"
-        data = pd.read_csv(datapath)
-        volume = data['col2'].sum()/300
-        self.VolumeReference[code] = volume
+        try:
+            datapath = f"volume_data/{code}.csv"
+            data = pd.read_csv(datapath)
+            volume = data['col2'].sum()/300
+            self.VolumeReference[code] = volume
+        except:
+            self.request_opt10080(code)
+            time.sleep(1)
+            print(f"Add New Stock Data [{code}]")
+            datapath = f"volume_data/{code}.csv"
+            data = pd.read_csv(datapath)
+            volume = data['col2'].sum()/300
+            self.VolumeReference[code] = volume
+            time.sleep(2.6)
+
 
     #### Auto Sell ##########################
     def AutoSell(self, waitingtime, code, quantity, price, order_num):
@@ -935,30 +988,19 @@ class MyWindow(QMainWindow):
 
         if self.TradingInfo[code][2] >= 1: ## 미체결 물량 존재시
             time.sleep(0.4)
-            self.SendOrder("매수취소", "8002", self.account, 3, code , self.TradingInfo[code][2], 0, "03", order_num)
+            self.SendOrder("매도취소", "8002", self.account, 3, code , self.TradingInfo[code][2], 0, "03", order_num)
             self.available = int(self.available + self.TradingInfo[code][0] * self.TradingInfo[code][2] )
             self.account_money_text.setText(f" 주문가능금액: {self.available}")
+            self.TradingInfo[code][2] = 0
             expired_flag = 1
             
             now = datetime.datetime.now()
             current_time = now.strftime("%H:%M:%S")
             name = self.GetMasterCodeName(code)
             name = name.replace(" ", "")
-            self.plain_text_edit.appendPlainText(f"[{current_time}] [매수취소] {name} {code}\n 취소수량:{self.TradingInfo[code][2]}")
-
-        if self.TradingInfo[code][1] >= quantity:
-            self.SendOrder("매도", "8001", self.account, 2, code , quantity, 0, "03", "")
-            expired_flag = 1
-        elif self.TradingInfo[code][1] > 0:
+            self.plain_text_edit.appendPlainText(f"[{current_time}] [매수취소] {name} {code}\n 취소수량:{self.TradingInfo[code][2]}\n")
             self.SendOrder("매도", "8001", self.account, 2, code , self.TradingInfo[code][1], 0, "03", "")
-            expired_flag = 1
-
-        if  expired_flag == 1:
-            now = datetime.datetime.now()
-            current_time = now.strftime("%H:%M:%S")
-            name = self.GetMasterCodeName(code)
-            name = name.replace(" ", "")
-            self.plain_text_edit.appendPlainText(f"[{current_time}] [Time Expired] {name} {code}\n 취소수량:{quantity} ")
+            self.plain_text_edit.appendPlainText(f"[{current_time}] [Time Expired] {name} {code}\n 취소수량:{quantity}\n")
 
         
 
@@ -1015,7 +1057,7 @@ class MyWindow(QMainWindow):
                         name = name.replace(" ", "")
                         now = datetime.datetime.now()
                         current_time = now.strftime("%H:%M:%S")
-                        self.plain_text_edit.appendPlainText(f"[{current_time}] [주문접수] {name} {code}\n [시장가] 주문수량:{quantity}")
+                        self.plain_text_edit.appendPlainText(f"[{current_time}] [주문접수] {name} {code}\n [시장가] 주문수량:{quantity}\n")
                         print(f"[{current_time}] [주문접수] {name} {code}\n [시장가] 주문수량:{quantity}")
 
                         self.available = int(self.available - price * quantity * (1+0.0015) )  ## 주문시 예수금 차감
