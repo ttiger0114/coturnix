@@ -99,13 +99,14 @@ class MyWindow(QMainWindow):
         self.VolumeReference = {}
         self.TradingInfo = {}
         self.TradingType = {}
+        self.Confidence = {}
 
         ####################
         ####### Socket #####
         self.client = lb.ClientSocket()
 
         ##### GUI
-        self.view_num = 10
+        self.view_num = 30
 
         self.login_event_loop = QEventLoop()
         self.CommConnect()          # 로그인이 될 때까지 대기
@@ -295,7 +296,13 @@ class MyWindow(QMainWindow):
                 elif int(cur_price) < 0:
                     self.tableWidget.item(row_num,5).setForeground(QBrush(Qt.blue))
                 
+                self.tableWidget.item(row_num,0).setBackground(QColor(255,255,255))
+                self.tableWidget.item(row_num,1).setBackground(QColor(255,255,255))
+                self.tableWidget.item(row_num,2).setBackground(QColor(255,255,255))
+                self.tableWidget.item(row_num,3).setBackground(QColor(255,255,255))
+                self.tableWidget.item(row_num,4).setBackground(QColor(255,255,255))
                 self.tableWidget.item(row_num,5).setBackground(QColor(235,255,255))
+                self.tableWidget.item(row_num,5).setBackground(QColor(255,255,255))
 
         elif rqname == "분봉데이터":
             code = self.GetCommData(trcode, rqname, 0, "종목코드")
@@ -673,6 +680,15 @@ class MyWindow(QMainWindow):
             elif int(a0) < 0:
                 self.tableWidget.item(row_num,5).setForeground(QBrush(Qt.blue))
 
+            temp_color = self.Confidence[code]
+            # print(code, temp_color)
+            self.tableWidget.item(row_num,0).setBackground(QColor(255,255-temp_color,255-temp_color))
+            self.tableWidget.item(row_num,1).setBackground(QColor(255,255-temp_color,255-temp_color))
+            self.tableWidget.item(row_num,2).setBackground(QColor(255,255-temp_color,255-temp_color))
+            self.tableWidget.item(row_num,3).setBackground(QColor(255,255-temp_color,255-temp_color))
+            self.tableWidget.item(row_num,4).setBackground(QColor(255,255-temp_color,255-temp_color))
+            self.tableWidget.item(row_num,6).setBackground(QColor(255,255-temp_color,255-temp_color))
+            # self.tableWidget.item(row_num,5).setBackground(QColor(255,255-temp_color,255-temp_color))
             self.tableWidget.item(row_num,5).setBackground(QColor(235,255,255))
 
     
@@ -718,7 +734,10 @@ class MyWindow(QMainWindow):
 
 
             if trading_state == '체결':
-                trading_price0 = int(self.GetChejanData('910')) ## 체결가
+                try:
+                    trading_price0 = int(self.GetChejanData('910')) ## 체결가
+                except:
+                    trading_price0 = 0
                 trading_number = int(self.GetChejanData('911')) # 누적 체결 수량
 
                 now = datetime.datetime.now()
@@ -748,11 +767,11 @@ class MyWindow(QMainWindow):
                     ## 매수 완료시 매도 주문 
                     if self.TradingInfo[code][2] == 0 : 
                         target_price = int(float(trading_price0)*(1 + self.profit_rate/100))
-                        if target_price >= 1000:
+                        if target_price >= 1000 and target_price < 5000:
                             target_price = target_price - target_price%5
-                        elif target_price >= 5000:
+                        elif target_price >= 5000 and target_price < 10000:
                             target_price = target_price - target_price%10
-                        elif target_price >= 10000:
+                        elif target_price >= 10000 and target_price < 50000:
                             target_price = target_price - target_price%50
                         elif target_price >= 50000:
                             target_price = target_price - target_price%100
@@ -826,6 +845,7 @@ class MyWindow(QMainWindow):
             self.FirstReceiveFlag[code] = 0
             self.TradingInfo[code] = [0, 0, 0 , '', 0] # order price, order amount, not signed amount, order number, traded amount
             self.TradingType[code] = 0 # 0 = 대기, 1 = 매도, 2 = 매수
+            self.Confidence[code] = 0
 
     # class AutoUpdate(QThread):
     #     def __init__(self, window, parent = None):
@@ -883,7 +903,7 @@ class MyWindow(QMainWindow):
     def AutoUpdateDataDict(self):
         while(True):
             # time.sleep(60 - datetime.datetime.now().second)
-            time.sleep(3)
+            time.sleep(2)
 
             Stacked_code = []
             Stacked_Stockdata = []
@@ -1043,31 +1063,6 @@ class MyWindow(QMainWindow):
 
     #############################################
     ### Send Packet to AI model ########
-
-    # class Client(QThread):
-    #     def __init__(self, window, parent = None):
-    #         super().__init__(parent)
-    #         self.window = window
-    #     def run(self): 
-    #         while(True):
-    #             received_data = self.window.client.Waiting()
-    #             if received_data[0] == 'buy':
-    #                 codelist = received_data[1]
-    #                 code_num = len(codelist)
-    #                 available = self.window.available/code_num/10
-
-    #                 for i, code in enumerate(codelist):
-    #                     time.sleep(0.3)
-    #                     ## 주문 요청
-    #                     data_len = len(self.window.DataDict[code])
-    #                     price = self.window.DataDict[code][data_len-2][3] 
-    #                     quantity = int(available / price )
-    #                     if quantity >= 1 and self.window.TradingInfo[code][1] == 0:
-    #                         # price = int(price * 0.9)
-    #                         self.window.SendOrder("매수", "8000", self.window.account, 1, code , quantity, price, "00", "") ## 지정가매수
-    #                         self.window.AutoSell(720, code, quantity, price, self.window.TradingInfo[code][3])
-    #                         # self.AutoSell(3, code, quantity, price, self.TradingInfo[code][3])
-
     def ClientWaiting(self):
         while(True):
             received_data = self.client.Waiting()
@@ -1104,8 +1099,35 @@ class MyWindow(QMainWindow):
                         # self.AutoSell(720, code, quantity, price, self.TradingInfo[code][3])  ## 시간 만료 매도 카운트 시작
                         # self.AutoSell(5, code, quantity, price, self.TradingInfo[code][3])
 
-                        AutoSellThread = threading.Thread(target = self.AutoSell, args = (10, code, quantity, price, self.TradingInfo[code][3]))
+                        AutoSellThread = threading.Thread(target = self.AutoSell, args = (720, code, quantity, price, self.TradingInfo[code][3]))
                         AutoSellThread.start()
+
+            elif received_data[0] == 'confidence':
+                codelist = received_data[1]
+                confidence = received_data[2]
+                max_confi = np.argmax(confidence, axis = 1)
+
+                # qRegisterMetaType<QVector<int>>("QVector<int>")
+
+                for i, code in enumerate(codelist):
+                    row_num = self.codeList.index(code)
+                    if row_num < self.view_num:
+                        temp_color = 0
+                        if max_confi[i] == 1:
+                            if int(confidence[i,2] * 255) >= 40:
+                                temp_color = ((int(confidence[i,2] * 255) - 40) * 5)
+                            elif ((int(confidence[i,2] * 255)- 40) * 5) >= 100:
+                                temp_color = 100
+                            else: 
+                                temp_color = 0
+
+                        elif max_confi[i] == 2:
+                            temp_color = 100
+                        
+                        self.Confidence[code] = temp_color
+                    
+
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
