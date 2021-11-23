@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 import tqdm
-
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from kiwoom_stock import LoopBackSocket as lb
@@ -117,7 +116,7 @@ if __name__ == "__main__":
                         now = datetime.datetime.now()
                         print("input")
                         data = data.float()
-                        print(data)
+                        # print(data)
                         print(data.shape)
                         src_mask=model.generate_square_subsequent_mask()
                         out=model(data,src_mask)
@@ -129,12 +128,13 @@ if __name__ == "__main__":
                         c = torch.argmax(out,dim=1)
                         outs = c.clone().detach().numpy()
                         
-                        # condi = np.where(outs == 2)[0]
-                        # if len(condi) != 0:
-                        #     for code_idx in condi:
-                        #         ret.append(code[code_idx])
-                        #     print(ret)
-                        #     server.SendData(["buy", ret])
+                        condi = np.where(outs == 2)[0]
+                        if len(condi) != 0:
+                            for code_idx in condi:
+                                ret.append(code[code_idx])
+                            print(ret)
+                            print()
+                            server.SendData(["buy", ret])
                         
                         server.SendData(["confidence", code, confidence])
                         
