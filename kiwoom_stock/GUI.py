@@ -1038,6 +1038,7 @@ class MyWindow(QMainWindow):
                 
 
                 print("시간만료", "8001", self.account, 2, code , self.TradingInfo[code][1], 0, "03", "")
+                time.sleep(0.3)
                 cancel_mount = self.TradingInfo[code][1]
                 self.SendOrder("매도", "8001", self.account, 2, code , self.TradingInfo[code][1], 0, "03", "")
                 self.plain_text_edit.appendPlainText(f"[{current_time}] [Time Expired] {name} {code}\n 취소수량:{cancel_mount}\n")
@@ -1055,6 +1056,7 @@ class MyWindow(QMainWindow):
 
                 print("시간만료", "8001", self.account, 2, code , self.TradingInfo[code][1], 0, "03", "")
                 cancel_mount = self.TradingInfo[code][1]
+                time.sleep(0.3)
                 self.SendOrder("매도", "8001", self.account, 2, code , self.TradingInfo[code][1], 0, "03", "")
                 self.plain_text_edit.appendPlainText(f"[{current_time}] [Time Expired] {name} {code}\n 취소수량:{cancel_mount}\n")
 
