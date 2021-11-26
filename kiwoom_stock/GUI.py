@@ -1030,7 +1030,7 @@ class MyWindow(QMainWindow):
             current_time = now.strftime("%H:%M:%S")
             name = self.GetMasterCodeName(code)
             name = name.replace(" ", "")
-            
+            #
             if self.TradingType[code] == 1:    
                 self.plain_text_edit.appendPlainText(f"[{current_time}] [매도취소] {name} {code}\n 취소수량:{self.TradingInfo[code][2]}\n")
                 self.SendOrder("매도취소", "8002", self.account, 3, code , self.TradingInfo[code][2], 0, "03", order_num)
